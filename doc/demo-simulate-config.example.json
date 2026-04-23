@@ -1,0 +1,39 @@
+{
+  "apiBase": "http://localhost:5000",
+  "deviceId": "00000000-0000-0000-0000-000000000000",
+  "apiKey": "REPLACE_WITH_PLAINTEXT_KEY_FROM_CREATE_DEVICE",
+  "intervalMs": 400,
+  "pathLossExponent": 2.0,
+  "path": {
+    "mode": "line",
+    "from": [1.0, 1.0],
+    "to": [19.0, 9.0],
+    "roundTripSeconds": 60
+  },
+  "beacons": [
+    {
+      "uuid": "00000000-0000-0000-0000-000000000001",
+      "major": 1,
+      "minor": 1,
+      "x": 0.0,
+      "y": 0.0,
+      "txPower": -59
+    },
+    {
+      "uuid": "00000000-0000-0000-0000-000000000002",
+      "major": 1,
+      "minor": 2,
+      "x": 20.0,
+      "y": 0.0,
+      "txPower": -59
+    },
+    {
+      "uuid": "00000000-0000-0000-0000-000000000003",
+      "major": 1,
+      "minor": 3,
+      "x": 10.0,
+      "y": 10.0,
+      "txPower": -59
+    }
+  ]
+}

@@ -1,0 +1,291 @@
+@page "/floors/{FloorId:guid}/beacons"
+@rendermode InteractiveServer
+@inject BlePositioningApiClient Api
+@inject AdminAuthState Auth
+@inject NavigationManager Nav
+@inject IJSRuntime Js
+
+<PageTitle>信标</PageTitle>
+<p><a href="/">返回楼层</a></p>
+<h1>信标 <small class="text-muted">@FloorId</small></h1>
+@if (!string.IsNullOrEmpty(_success))
+{
+    <div class="alert alert-success" role="alert">@_success</div>
+}
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger" role="alert">@_error</div>
+}
+@if (_loading)
+{
+    <p>加载中…</p>
+}
+else
+{
+    @if (Auth.IsAdmin)
+    {
+    <div class="card mb-4">
+        <div class="card-header">新建信标</div>
+        <div class="card-body row g-2">
+            <div class="col-md-4">
+                <label class="form-label">UUID</label>
+                <input class="form-control" @bind="_nUuid" maxlength="36" placeholder="iBeacon UUID" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Major</label>
+                <input type="number" class="form-control" @bind="_nMajor" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Minor</label>
+                <input type="number" class="form-control" @bind="_nMinor" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">X (m)</label>
+                <input type="number" step="0.01" class="form-control" @bind="_nX" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Y (m)</label>
+                <input type="number" step="0.01" class="form-control" @bind="_nY" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">TxPower</label>
+                <input type="number" class="form-control" @bind="_nTx" />
+            </div>
+            <div class="col-12">
+                <button type="button" class="btn btn-primary" disabled="@_busy" @onclick="CreateAsync">添加</button>
+            </div>
+        </div>
+    </div>
+    }
+
+    @if (Auth.IsAdmin && _editingBeaconId is not null)
+    {
+        <div class="card mb-4 border-primary">
+            <div class="card-header">编辑信标 — @_editUuid / @_editMajor / @_editMinor</div>
+            <div class="card-body row g-2">
+                <div class="col-md-3">
+                    <label class="form-label">X (m)</label>
+                    <input type="number" step="0.01" class="form-control" @bind="_eX" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Y (m)</label>
+                    <input type="number" step="0.01" class="form-control" @bind="_eY" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">TxPower</label>
+                    <input type="number" class="form-control" @bind="_eTx" />
+                </div>
+                <div class="col-12">
+                    <button type="button" class="btn btn-primary me-2" disabled="@_busy" @onclick="SaveEditAsync">保存</button>
+                    <button type="button" class="btn btn-secondary" disabled="@_busy" @onclick="CancelEdit">取消</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_rows is not null)
+    {
+        <table class="table table-sm table-striped">
+            <thead>
+            <tr>
+                <th>UUID / Major / Minor</th>
+                <th>坐标 (m)</th>
+                <th>TxPower</th>
+                <th>Status</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var b in _rows)
+            {
+                <tr>
+                    <td>@b.Uuid / @b.Major / @b.Minor</td>
+                    <td>@b.X, @b.Y</td>
+                    <td>@b.TxPower</td>
+                    <td>@b.Status</td>
+                    <td>
+                        @if (Auth.IsAdmin)
+                        {
+                            <button type="button" class="btn btn-link btn-sm p-0 me-2" @onclick="() => StartEdit(b)">编辑</button>
+                            <button type="button" class="btn btn-link btn-sm p-0 text-danger" @onclick="() => DeleteAsync(b)">删除</button>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        if (_rows.Count == 0)
+        {
+            <p class="text-muted">该楼层下暂无信标。@(Auth.IsAdmin ? "可在上方添加。" : "")</p>
+        }
+    }
+}
+
+@code {
+    [Parameter] public Guid FloorId { get; set; }
+
+    private bool _loading = true;
+    private bool _busy;
+    private List<BeaconListItemDto>? _rows;
+    private string? _error;
+    private string? _success;
+
+    private string _nUuid = "";
+    private int _nMajor;
+    private int _nMinor;
+    private double _nX;
+    private double _nY;
+    private int _nTx = -59;
+
+    private Guid? _editingBeaconId;
+    private string _editUuid = "";
+    private int _editMajor;
+    private int _editMinor;
+    private double _eX;
+    private double _eY;
+    private int _eTx;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        if (string.IsNullOrEmpty(Auth.BearerToken))
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var res = await Api.GetBeaconsAsync(FloorId);
+            if (res?.Success == true)
+                _rows = res.Data ?? new();
+            else
+                _error = "该楼层不存在或拉取信标失败。";
+        }
+        catch (Exception)
+        {
+            _error = "拉取失败。请检查 API 与网络。";
+        }
+        _loading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void ClearMessages()
+    {
+        _error = null;
+        _success = null;
+    }
+
+    private async Task CreateAsync()
+    {
+        ClearMessages();
+        _busy = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var req = new CreateBeaconRequest(_nUuid.Trim(), _nMajor, _nMinor, _nX, _nY, _nTx);
+            var r = await Api.CreateBeaconAsync(FloorId, req);
+            if (!r.Ok)
+            {
+                _error = r.Error ?? "添加失败";
+                return;
+            }
+
+            _success = "信标已添加。";
+            _nUuid = "";
+            _nMajor = 0;
+            _nMinor = 0;
+            _nX = 0;
+            _nY = 0;
+            _nTx = -59;
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void StartEdit(BeaconListItemDto b)
+    {
+        ClearMessages();
+        _editingBeaconId = b.Id;
+        _editUuid = b.Uuid;
+        _editMajor = b.Major;
+        _editMinor = b.Minor;
+        _eX = b.X;
+        _eY = b.Y;
+        _eTx = b.TxPower;
+    }
+
+    private void CancelEdit()
+    {
+        _editingBeaconId = null;
+        ClearMessages();
+    }
+
+    private async Task SaveEditAsync()
+    {
+        if (_editingBeaconId is null)
+            return;
+        ClearMessages();
+        _busy = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var r = await Api.UpdateBeaconAsync(FloorId, _editingBeaconId.Value, new UpdateBeaconRequest(_eX, _eY, _eTx));
+            if (!r.Ok)
+            {
+                _error = r.Error ?? "保存失败";
+                return;
+            }
+
+            _success = "已保存。";
+            _editingBeaconId = null;
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task DeleteAsync(BeaconListItemDto b)
+    {
+        ClearMessages();
+        if (!await Js.InvokeAsync<bool>("confirm", $"删除信标 {b.Uuid} / {b.Major} / {b.Minor}？"))
+            return;
+        _busy = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var r = await Api.DeleteBeaconAsync(FloorId, b.Id);
+            if (!r.Ok)
+            {
+                _error = r.Error ?? "删除失败";
+                return;
+            }
+
+            _success = "已删除。";
+            if (_editingBeaconId == b.Id)
+                _editingBeaconId = null;
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+}

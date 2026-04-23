@@ -1,0 +1,322 @@
+@page "/floors/{FloorId:guid}/alert-rules"
+@rendermode InteractiveServer
+@inject BlePositioningApiClient Api
+@inject AdminAuthState Auth
+@inject NavigationManager Nav
+@inject IJSRuntime Js
+
+<PageTitle>围栏规则</PageTitle>
+<p>
+    <a href="/">返回楼层</a>
+    · <a href="@($"/floors/{FloorId}/beacons")">信标</a>
+</p>
+<h1>围栏规则 <small class="text-muted">@FloorId</small></h1>
+<p class="text-muted small">
+    <code>zonePolygon</code> 为 GeoJSON <code>Polygon</code>，坐标为<strong>楼层平面米制</strong>，外环首末点须闭合。示例见下方新建表单。触发：<code>0=进入</code>，<code>1=离开</code>，<code>2=进入或离开</code>（与 API <code>AlertTriggerKind</code> 一致）。
+</p>
+@if (!string.IsNullOrEmpty(_success))
+{
+    <div class="alert alert-success" role="alert">@_success</div>
+}
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger" role="alert">@_error</div>
+}
+@if (_loading)
+{
+    <p>加载中…</p>
+}
+else
+{
+    @if (Auth.IsAdmin)
+    {
+    <div class="card mb-4">
+        <div class="card-header">新建规则</div>
+        <div class="card-body">
+            <div class="row g-2">
+                <div class="col-md-4">
+                    <label class="form-label">名称</label>
+                    <input class="form-control" @bind="_nName" maxlength="100" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">TriggerOn</label>
+                    <select class="form-select" @bind="_nTrigger">
+                        <option value="0">0 进入</option>
+                        <option value="1">1 离开</option>
+                        <option value="2">2 进入/离开</option>
+                    </select>
+                </div>
+                <div class="col-md-2 d-flex align-items-end">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" @bind="_nEnabled" id="nEn" />
+                        <label class="form-check-label" for="nEn">启用</label>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-2">
+                <label class="form-label">ZonePolygon (JSON)</label>
+                <textarea class="form-control font-monospace small" rows="5" @bind="_nZone"></textarea>
+            </div>
+            <div class="mt-2">
+                <button type="button" class="btn btn-primary" disabled="@_busy" @onclick="CreateAsync">添加</button>
+            </div>
+        </div>
+    </div>
+    }
+
+    @if (Auth.IsAdmin && _editingRuleId is not null)
+    {
+        <div class="card mb-4 border-primary">
+            <div class="card-header">编辑规则 — @_editName</div>
+            <div class="card-body">
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label">名称</label>
+                        <input class="form-control" @bind="_editName" maxlength="100" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label">TriggerOn</label>
+                        <select class="form-select" @bind="_eTrigger">
+                            <option value="0">0 进入</option>
+                            <option value="1">1 离开</option>
+                            <option value="2">2 进入/离开</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" @bind="_eEnabled" id="eEn" />
+                            <label class="form-check-label" for="eEn">启用</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <label class="form-label">ZonePolygon (JSON)</label>
+                    <textarea class="form-control font-monospace small" rows="6" @bind="_eZone"></textarea>
+                </div>
+                <div class="mt-2">
+                    <button type="button" class="btn btn-primary me-2" disabled="@_busy" @onclick="SaveEditAsync">保存</button>
+                    <button type="button" class="btn btn-secondary" disabled="@_busy" @onclick="CancelEdit">取消</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_rows is not null)
+    {
+        <table class="table table-sm table-striped">
+            <thead>
+            <tr>
+                <th>名称</th>
+                <th>Trigger</th>
+                <th>启用</th>
+                <th>多边形 (摘要)</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var r in _rows)
+            {
+                <tr>
+                    <td>@r.Name</td>
+                    <td>@r.TriggerOn</td>
+                    <td>@(r.IsEnabled ? "是" : "否")</td>
+                    <td class="text-truncate" style="max-width: 18rem" title="@r.ZonePolygon">@Truncate(r.ZonePolygon, 80)</td>
+                    <td>
+                        @if (Auth.IsAdmin)
+                        {
+                            <button type="button" class="btn btn-link btn-sm p-0 me-2" @onclick="() => StartEdit(r)">编辑</button>
+                            <button type="button" class="btn btn-link btn-sm p-0 text-danger" @onclick="() => DeleteAsync(r)">删除</button>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        if (_rows.Count == 0)
+        {
+            <p class="text-muted">该楼层下暂无规则。@(Auth.IsAdmin ? "可在上方添加。" : "")</p>
+        }
+    }
+}
+
+@code {
+    [Parameter] public Guid FloorId { get; set; }
+
+    private bool _loading = true;
+    private bool _busy;
+    private List<AlertRuleListItemDto>? _rows;
+    private string? _error;
+    private string? _success;
+
+    private string _nName = "禁区 A";
+    private int _nTrigger;
+    private bool _nEnabled = true;
+    private string _nZone = "";
+
+    private const string _defaultZone =
+        "{\"type\":\"Polygon\",\"coordinates\":[[[0,0],[10,0],[10,8],[0,8],[0,0]]]}";
+
+    private Guid? _editingRuleId;
+    private string _editName = "";
+    private int _eTrigger;
+    private bool _eEnabled;
+    private string _eZone = "";
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        if (string.IsNullOrEmpty(Auth.BearerToken))
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+
+        if (string.IsNullOrEmpty(_nZone))
+            _nZone = _defaultZone;
+        await ReloadAsync();
+    }
+
+    private static string Truncate(string s, int max)
+    {
+        if (string.IsNullOrEmpty(s) || s.Length <= max)
+            return s;
+        return s[..max] + "…";
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var res = await Api.GetAlertRulesAsync(FloorId);
+            if (res?.Success == true)
+                _rows = res.Data ?? new();
+            else
+                _error = "该楼层不存在或拉取规则失败。";
+        }
+        catch (Exception)
+        {
+            _error = "拉取失败。请检查 API 与网络。";
+        }
+        _loading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void ClearMessages()
+    {
+        _error = null;
+        _success = null;
+    }
+
+    private async Task CreateAsync()
+    {
+        if (!Auth.IsAdmin)
+            return;
+        ClearMessages();
+        _busy = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var req = new CreateAlertRuleRequest(_nName.Trim(), _nZone.Trim(), (short)_nTrigger, _nEnabled);
+            var r = await Api.CreateAlertRuleAsync(FloorId, req);
+            if (!r.Ok)
+            {
+                _error = r.Error ?? "添加失败";
+                return;
+            }
+
+            _success = "规则已添加。";
+            _nName = "禁区 A";
+            _nZone = _defaultZone;
+            _nTrigger = 0;
+            _nEnabled = true;
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void StartEdit(AlertRuleListItemDto r)
+    {
+        ClearMessages();
+        _editingRuleId = r.Id;
+        _editName = r.Name;
+        _eTrigger = r.TriggerOn;
+        _eEnabled = r.IsEnabled;
+        _eZone = r.ZonePolygon;
+    }
+
+    private void CancelEdit()
+    {
+        _editingRuleId = null;
+        ClearMessages();
+    }
+
+    private async Task SaveEditAsync()
+    {
+        if (_editingRuleId is null)
+            return;
+        ClearMessages();
+        _busy = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var req = new UpdateAlertRuleRequest(
+                _editName.Trim(),
+                _eZone.Trim(),
+                (short)_eTrigger,
+                _eEnabled);
+            var r = await Api.UpdateAlertRuleAsync(FloorId, _editingRuleId.Value, req);
+            if (!r.Ok)
+            {
+                _error = r.Error ?? "保存失败";
+                return;
+            }
+
+            _success = "已保存。";
+            _editingRuleId = null;
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task DeleteAsync(AlertRuleListItemDto r)
+    {
+        if (!Auth.IsAdmin)
+            return;
+        ClearMessages();
+        if (!await Js.InvokeAsync<bool>("confirm", $"删除规则「{r.Name}」？"))
+            return;
+        _busy = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var res = await Api.DeleteAlertRuleAsync(FloorId, r.Id);
+            if (!res.Ok)
+            {
+                _error = res.Error ?? "删除失败";
+                return;
+            }
+
+            _success = "已删除。";
+            if (_editingRuleId == r.Id)
+                _editingRuleId = null;
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+}

@@ -1,0 +1,56 @@
+# .cursorrules — BLE 室内定位系统
+
+## 项目上下文
+这是一个基于 .NET 8 的蓝牙室内定位系统，包含 ASP.NET Core Web API、Blazor WebAssembly 管理后台、.NET MAUI 移动端。
+详细规范见 **CLAUDE.md**（含阅读顺序）、**design-spec.md**、**api-conventions.md**（HTTP 契约权威）、**mvp-scope.md**、**packages.md**、coding-standards.md；关系型数据库为 **PostgreSQL 16+**，见 `doc/database-selection.md` 与 `design-spec.md` ADR-005。
+
+## 技术栈
+- .NET 8 / ASP.NET Core 8 / Blazor WASM 8 / MAUI 8
+- Entity Framework Core 8 (Npgsql / PostgreSQL 16+)
+- SignalR (实时位置推送)
+- Redis (StackExchange.Redis)
+- MassTransit + RabbitMQ（首版 RSSI 不经 AMQP；见 `design-spec.md` ADR-009）
+- xUnit + FluentAssertions + Moq
+
+## 代码生成规则
+
+### 通用规则
+1. 所有 I/O 操作必须是 async/await，方法名以 Async 结尾
+2. 所有异步方法接受 CancellationToken 参数（默认值 default）
+3. 使用 Result<T> 模式处理业务错误，禁止在 Application 层 throw 业务异常
+4. 命名：类/接口/属性 PascalCase，私有字段 _camelCase，方法参数 camelCase
+5. 每个文件只包含一个公共类/接口/记录
+
+### 分层规则
+- Domain 层：不引用 EF Core、Redis 等外部包，只有纯 C# 实体和接口
+- Application 层：通过接口依赖基础设施；**轻量 CQS**（默认应用服务 + 读写职责分离），复杂用例可局部使用 Command/Query Handler（见 `design-spec.md` ADR-001）
+- Infrastructure 层：实现 Application 层接口，可引用 EF Core、Redis 等
+- API 层：控制器薄，只做请求验证和响应映射，业务逻辑在 Application 层；EF 物理表名列名与 `design-spec.md` §2.4.2 **snake_case** 一致（ADR-007），可用 `UseSnakeCaseNamingConvention()`
+
+### 定位系统特定规则
+- RSSI 上报接口必须返回 202 Accepted，不等待定位计算结果
+- RSSI 设备凭据仅使用 HTTP 头 **`X-Api-Key`**，认证方案名 **`ApiKey`**（与 `design-spec.md` ADR-006 一致）
+- 定位计算通过 Channel<T> 异步处理，不阻塞 HTTP 请求线程
+- 最新位置优先读 Redis，不命中才查数据库
+- 所有定位参数（TxPower、路径损耗系数等）从 IOptions<PositioningOptions> 读取，不硬编码
+- 坐标值必须做边界校验（不能超出楼层地图尺寸）
+
+### 测试规则
+- 测试方法命名：被测方法_场景_期望结果
+- 使用 FluentAssertions 的 Should() 语法
+- 定位算法测试必须包含已知输入/已知输出的回归用例
+
+## 代码风格
+- 使用 var 当类型可推断时
+- 优先使用 record 表示不可变 DTO 和值对象
+- 优先使用集合表达式 [] 替代 new List<T>()
+- 使用 pattern matching 和 switch expressions
+- LINQ 查询优先使用方法链而非查询语法
+
+## 禁止的模式
+- 禁止 Thread.Sleep（用 await Task.Delay）
+- 禁止 .Result 或 .Wait() 阻塞异步方法
+- 禁止在 Domain 层引用任何基础设施相关的 NuGet 包
+- 禁止直接在控制器中写业务逻辑
+- 禁止在 SignalR Hub 方法中执行耗时操作
+- 禁止记录原始 RSSI 数组到 Info 级别日志（只能 Debug）

@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/tests/">
+    <Project Path="tests/BlePositioning.Tests/BlePositioning.Tests.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/BlePositioning.Admin/BlePositioning.Admin.csproj" />
+    <Project Path="src/BlePositioning.API/BlePositioning.API.csproj" />
+    <Project Path="src/BlePositioning.Application/BlePositioning.Application.csproj" />
+    <Project Path="src/BlePositioning.Domain/BlePositioning.Domain.csproj" />
+    <Project Path="src/BlePositioning.Infrastructure/BlePositioning.Infrastructure.csproj" />
+  </Folder>
+</Solution>

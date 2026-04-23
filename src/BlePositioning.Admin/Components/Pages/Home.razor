@@ -1,0 +1,371 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@inject BlePositioningApiClient Api
+@inject AdminAuthState Auth
+@inject NavigationManager Nav
+@inject IJSRuntime Js
+
+<PageTitle>楼层</PageTitle>
+<h1>楼层</h1>
+@if (!string.IsNullOrEmpty(_success))
+{
+    <div class="alert alert-success" role="alert">@_success</div>
+}
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger" role="alert">@_error</div>
+}
+@if (_loading)
+{
+    <p>加载中…</p>
+}
+else
+{
+    @if (Auth.IsAdmin)
+    {
+    <div class="card mb-4">
+        <div class="card-header">新建楼层</div>
+        <div class="card-body row g-2">
+            <div class="col-md-3">
+                <label class="form-label">名称</label>
+                <input class="form-control" @bind="_newName" maxlength="50" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">建筑编码</label>
+                <input class="form-control" @bind="_newBuilding" maxlength="20" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">宽 (m)</label>
+                <input type="number" step="0.01" class="form-control" @bind="_newW" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">高 (m)</label>
+                <input type="number" step="0.01" class="form-control" @bind="_newH" />
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">地图 URL（可选）</label>
+                <input class="form-control" @bind="_newMapUrl" maxlength="500" />
+            </div>
+            <div class="col-md-4">
+                <label class="form-label">或上传地图图片（JPEG/PNG/WebP/GIF，≤6MB）</label>
+                <InputFile OnChange="OnNewMapPick" accept="image/*" class="form-control" />
+            </div>
+            <div class="col-12">
+                <button type="button" class="btn btn-primary" disabled="@_busy" @onclick="CreateAsync">创建</button>
+            </div>
+        </div>
+    </div>
+    }
+
+    @if (Auth.IsAdmin && _editing is not null)
+    {
+        <div class="card mb-4 border-primary">
+            <div class="card-header">编辑楼层 — @_editName</div>
+            <div class="card-body row g-2">
+                <div class="col-md-3">
+                    <label class="form-label">名称</label>
+                    <input class="form-control" @bind="_editName" maxlength="50" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">建筑编码</label>
+                    <input class="form-control" @bind="_editBuilding" maxlength="20" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">宽 (m)</label>
+                    <input type="number" step="0.01" class="form-control" @bind="_editW" />
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label">高 (m)</label>
+                    <input type="number" step="0.01" class="form-control" @bind="_editH" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">地图 URL</label>
+                    <input class="form-control" @bind="_editMapUrl" maxlength="500" />
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">上传地图文件</label>
+                    <InputFile OnChange="OnEditMapPick" accept="image/*" class="form-control" />
+                </div>
+                <div class="col-12">
+                    <button type="button" class="btn btn-outline-primary me-2" disabled="@(_busy || _editMapFile is null)" @onclick="UploadEditMapAsync">仅上传地图</button>
+                    <button type="button" class="btn btn-primary me-2" disabled="@_busy" @onclick="SaveEditAsync">保存</button>
+                    <button type="button" class="btn btn-secondary" disabled="@_busy" @onclick="CancelEdit">取消</button>
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (_floors is not null)
+    {
+        <table class="table table-sm table-striped">
+            <thead>
+            <tr>
+                <th>名称</th>
+                <th>建筑</th>
+                <th>宽×高 (m)</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var f in _floors)
+            {
+                <tr>
+                    <td>@f.Name</td>
+                    <td>@f.BuildingCode</td>
+                    <td>@f.WidthMeters × @f.HeightMeters</td>
+                    <td>
+                        <a class="link-primary me-2" href="@($"/floors/{f.Id}/beacons")">信标</a>
+                        <a class="link-primary me-2" href="@($"/floors/{f.Id}/alert-rules")">围栏</a>
+                        @if (Auth.IsAdmin)
+                        {
+                            <button type="button" class="btn btn-link btn-sm p-0 me-2" @onclick="() => StartEdit(f)">编辑</button>
+                            <button type="button" class="btn btn-link btn-sm p-0 text-danger" @onclick="() => DeleteAsync(f)">删除</button>
+                        }
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+        if (_floors.Count == 0)
+        {
+            <p class="text-muted">暂无楼层数据。@(Auth.IsAdmin ? "可在上方创建。" : "")</p>
+        }
+    }
+}
+
+@code {
+    private bool _loading = true;
+    private bool _busy;
+    private List<FloorDto>? _floors;
+    private string? _error;
+    private string? _success;
+    private Guid? _editing;
+
+    private string _newName = "";
+    private string _newBuilding = "";
+    private double _newW = 50;
+    private double _newH = 40;
+    private string? _newMapUrl;
+    private IBrowserFile? _newMapFile;
+
+    private string _editName = "";
+    private string _editBuilding = "";
+    private double _editW;
+    private double _editH;
+    private string? _editMapUrl;
+    private IBrowserFile? _editMapFile;
+
+    private void OnNewMapPick(InputFileChangeEventArgs e) =>
+        _newMapFile = e.FileCount > 0 ? e.File : null;
+
+    private void OnEditMapPick(InputFileChangeEventArgs e) =>
+        _editMapFile = e.FileCount > 0 ? e.File : null;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        if (string.IsNullOrEmpty(Auth.BearerToken))
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+
+        await ReloadAsync();
+    }
+
+    private async Task ReloadAsync()
+    {
+        _loading = true;
+        _error = null;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var res = await Api.GetFloorsAsync();
+            if (res?.Success == true)
+                _floors = res.Data ?? new();
+            else
+                _error = "拉取楼层失败。";
+        }
+        catch (Exception)
+        {
+            _error = "拉取失败：请确认 BLE API 已启动，且 `Api:Base` 正确（如 http://localhost:5230）。";
+        }
+        _loading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CreateAsync()
+    {
+        ClearMessages();
+        var mapUrl = string.IsNullOrWhiteSpace(_newMapUrl) ? null : _newMapUrl.Trim();
+        _busy = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var req = new CreateFloorRequest(_newName.Trim(), _newBuilding.Trim(), _newW, _newH);
+            var r = await Api.CreateFloorAsync(req);
+            if (!r.Ok)
+            {
+                _error = r.Error ?? "创建失败";
+                return;
+            }
+
+            if (r.Data is not null && _newMapFile is not null)
+            {
+                await using var fs = _newMapFile.OpenReadStream(6_000_000);
+                var ct = string.IsNullOrWhiteSpace(_newMapFile.ContentType)
+                    ? "image/jpeg"
+                    : _newMapFile.ContentType;
+                var up = await Api.UploadMapImageAsync(r.Data.Id, fs, _newMapFile.Name, ct);
+                if (!up.Ok)
+                    _error = up.Error ?? "楼层已创建，但地图上传失败。";
+            }
+            else if (r.Data is not null && mapUrl is not null)
+            {
+                var u = new UpdateFloorRequest(
+                    r.Data.Name,
+                    r.Data.BuildingCode,
+                    r.Data.WidthMeters,
+                    r.Data.HeightMeters,
+                    mapUrl);
+                var u2 = await Api.UpdateFloorAsync(r.Data.Id, u);
+                if (!u2.Ok)
+                    _error = u2.Error ?? "楼层已创建，但地图 URL 未保存。";
+            }
+
+            _success = string.IsNullOrEmpty(_error) ? "楼层已创建。" : null;
+            _newName = "";
+            _newBuilding = "";
+            _newW = 50;
+            _newH = 40;
+            _newMapUrl = null;
+            _newMapFile = null;
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void ClearMessages()
+    {
+        _error = null;
+        _success = null;
+    }
+
+    private void StartEdit(FloorDto f)
+    {
+        ClearMessages();
+        _editing = f.Id;
+        _editName = f.Name;
+        _editBuilding = f.BuildingCode;
+        _editW = f.WidthMeters;
+        _editH = f.HeightMeters;
+        _editMapUrl = f.MapImageUrl;
+        _editMapFile = null;
+    }
+
+    private void CancelEdit()
+    {
+        _editing = null;
+        _editMapFile = null;
+        ClearMessages();
+    }
+
+    private async Task UploadEditMapAsync()
+    {
+        if (_editing is null || _editMapFile is null)
+            return;
+        ClearMessages();
+        _busy = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            await using var fs = _editMapFile.OpenReadStream(6_000_000);
+            var ct = string.IsNullOrWhiteSpace(_editMapFile.ContentType)
+                ? "image/jpeg"
+                : _editMapFile.ContentType;
+            var up = await Api.UploadMapImageAsync(_editing.Value, fs, _editMapFile.Name, ct);
+            if (!up.Ok)
+            {
+                _error = up.Error ?? "上传失败";
+                return;
+            }
+
+            _success = "地图已上传。";
+            _editMapFile = null;
+            if (up.Data?.MapImageUrl is not null)
+                _editMapUrl = up.Data.MapImageUrl;
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task SaveEditAsync()
+    {
+        if (_editing is null)
+            return;
+        ClearMessages();
+        _busy = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var req = new UpdateFloorRequest(
+                _editName.Trim(),
+                _editBuilding.Trim(),
+                _editW,
+                _editH,
+                string.IsNullOrWhiteSpace(_editMapUrl) ? null : _editMapUrl.Trim());
+            var r = await Api.UpdateFloorAsync(_editing.Value, req);
+            if (!r.Ok)
+            {
+                _error = r.Error ?? "保存失败";
+                return;
+            }
+
+            _success = "已保存。";
+            _editing = null;
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task DeleteAsync(FloorDto f)
+    {
+        ClearMessages();
+        if (!await Js.InvokeAsync<bool>("confirm", $"确定删除楼层「{f.Name}」及其信标？"))
+            return;
+        _busy = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var r = await Api.DeleteFloorAsync(f.Id);
+            if (!r.Ok)
+            {
+                _error = r.Error ?? "删除失败";
+                return;
+            }
+
+            _success = "已删除。";
+            if (_editing == f.Id)
+                _editing = null;
+            await ReloadAsync();
+        }
+        finally
+        {
+            _busy = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+}

@@ -1,0 +1,211 @@
+@page "/devices"
+@rendermode InteractiveServer
+@inject BlePositioningApiClient Api
+@inject AdminAuthState Auth
+@inject NavigationManager Nav
+@inject IOptions<ApiOptions> ApiOptions
+@inject IJSRuntime Js
+
+<PageTitle>设备</PageTitle>
+<h1>追踪设备</h1>
+<p>
+    <a href="/map-live">实时地图</a>
+    · <a href="@SwaggerUrl" target="_blank" rel="noopener">Swagger</a>
+    （完整契约、RSSI 等）
+</p>
+@if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger" role="alert">@_error</div>
+}
+@if (!string.IsNullOrEmpty(_success))
+{
+    <div class="alert alert-success" role="alert">@_success</div>
+}
+
+@if (Auth.IsAdmin)
+{
+<div class="card mb-4">
+    <div class="card-header">新建设备</div>
+    <div class="card-body row g-2 align-items-end">
+        <div class="col-md-3">
+            <label class="form-label">设备编码</label>
+            <input class="form-control" @bind="_newCode" maxlength="64" />
+        </div>
+        <div class="col-md-3">
+            <label class="form-label">显示名</label>
+            <input class="form-control" @bind="_newName" maxlength="100" />
+        </div>
+        <div class="col-md-2">
+            <label class="form-label">类型</label>
+            <select class="form-select" @bind="_newType">
+                <option value="@((int)DeviceType.Person)">人员</option>
+                <option value="@((int)DeviceType.Asset)">资产</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button type="button" class="btn btn-primary" disabled="@_createBusy" @onclick="CreateDeviceAsync">创建</button>
+        </div>
+    </div>
+</div>
+}
+
+@if (_showKeyModal)
+{
+    <div class="modal d-block" tabindex="-1" style="background: rgba(0,0,0,.4);">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">API Key（仅此一次）</h5>
+                    <button type="button" class="btn-close" @onclick="CloseKeyModal"></button>
+                </div>
+                <div class="modal-body">
+                    <p>请立即保存到安全处，关闭后无法再次查看明文 Key。</p>
+                    <pre class="bg-light p-2 user-select-all" style="word-break: break-all;">@_plainKey</pre>
+                    <button type="button" class="btn btn-outline-primary" @onclick="CopyKeyAsync">复制到剪贴板</button>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" @onclick="CloseKeyModal">已保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_loading)
+{
+    <p>加载中…</p>
+}
+else if (_rows is not null)
+{
+    <table class="table table-sm table-striped">
+        <thead>
+        <tr>
+            <th>编码</th>
+            <th>显示名</th>
+            <th>类型</th>
+            <th>在线</th>
+            <th></th>
+        </tr>
+        </thead>
+        <tbody>
+        @foreach (var d in _rows)
+        {
+            <tr>
+                <td>@d.DeviceCode</td>
+                <td>@d.DisplayName</td>
+                <td>@d.Type</td>
+                <td>@(d.IsOnline ? "是" : "否")</td>
+                <td>
+                    <a class="link-primary" href="@($"/map-live")">地图</a>
+                    · <a class="link-primary" href="@($"/devices/{d.Id}/trajectory")">轨迹</a>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+    if (_rows.Count == 0)
+    {
+        <p class="text-muted">暂无设备。@(Auth.IsAdmin ? "使用上方表单创建，或使用 Swagger POST /api/v1/devices。" : "")</p>
+    }
+}
+
+@code {
+    private bool _loading = true;
+    private bool _createBusy;
+    private List<DeviceSummaryDto>? _rows;
+    private string? _error;
+    private string? _success;
+    private string _newCode = "demo-device-1";
+    private string _newName = "演示设备";
+    private int _newType = (int)DeviceType.Person;
+    private bool _showKeyModal;
+    private string _plainKey = "";
+
+    private string SwaggerUrl
+    {
+        get
+        {
+            var b = ApiOptions.Value.Base?.Trim().TrimEnd('/') ?? "http://localhost:5230";
+            return $"{b}/swagger";
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        if (string.IsNullOrEmpty(Auth.BearerToken))
+        {
+            Nav.NavigateTo("/login");
+            return;
+        }
+
+        await ReloadListAsync();
+    }
+
+    private async Task ReloadListAsync()
+    {
+        _loading = true;
+        _error = null;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            var res = await Api.GetDevicesAsync();
+            if (res?.Success == true)
+                _rows = res.Data ?? new();
+            else
+                _error = "拉取设备列表失败。";
+        }
+        catch
+        {
+            _error = "拉取失败。请检查 API。";
+        }
+        _loading = false;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task CreateDeviceAsync()
+    {
+        _error = null;
+        _success = null;
+        if (string.IsNullOrWhiteSpace(_newCode))
+        {
+            _error = "设备编码不能为空。";
+            return;
+        }
+        _createBusy = true;
+        await InvokeAsync(StateHasChanged);
+        var type = (DeviceType)_newType;
+        var r = await Api.CreateDeviceAsync(_newCode.Trim(), string.IsNullOrWhiteSpace(_newName) ? _newCode.Trim() : _newName.Trim(), type);
+        _createBusy = false;
+        if (r is { Ok: true, Data: not null })
+        {
+            _plainKey = r.Data.ApiKey;
+            _showKeyModal = true;
+            await ReloadListAsync();
+        }
+        else
+            _error = r.Error ?? "创建失败。";
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private void CloseKeyModal()
+    {
+        _showKeyModal = false;
+        _plainKey = "";
+    }
+
+    private async Task CopyKeyAsync()
+    {
+        try
+        {
+            await Js.InvokeVoidAsync("navigator.clipboard.writeText", _plainKey);
+            _success = "已复制。";
+        }
+        catch
+        {
+            _error = "复制失败，请手动选择复制。";
+        }
+        await InvokeAsync(StateHasChanged);
+    }
+}
