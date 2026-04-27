@@ -1,0 +1,11 @@
+@* 独立交互岛：读取电路内 AdminAuthState，避免静态 MainLayout 与页面作用域不一致 *@
+@rendermode InteractiveServer
+@inject AdminAuthState Auth
+
+@if (!string.IsNullOrEmpty(Auth.BearerToken))
+{
+    <span class="admin-muted-small">
+        会话
+        <span class="badge text-bg-light border ms-1">@(Auth.IsAdmin ? "管理员" : "只读")</span>
+    </span>
+}

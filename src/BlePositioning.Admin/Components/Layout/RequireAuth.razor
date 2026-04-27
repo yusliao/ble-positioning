@@ -1,0 +1,20 @@
+@* 置于需登录的业务页顶部；在首帧渲染后整页跳转登录，避免静态布局里无法读取电路内 Token *@
+@rendermode InteractiveServer
+@inject AdminAuthState Auth
+@inject NavigationManager Nav
+
+@code {
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        var rel = Nav.ToBaseRelativePath(Nav.Uri);
+        if (AdminRouteGuard.IsPublicRelativePath(rel))
+            return;
+        if (!string.IsNullOrEmpty(Auth.BearerToken))
+            return;
+        var ru = string.IsNullOrEmpty(rel) ? "" : rel;
+        Nav.NavigateTo($"/login?returnUrl={Uri.EscapeDataString(ru)}", forceLoad: true);
+        await Task.CompletedTask;
+    }
+}

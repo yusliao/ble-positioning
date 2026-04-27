@@ -1,0 +1,92 @@
+@page "/customer-showcase/preview/{Slug}"
+@rendermode InteractiveServer
+@using System.IO
+@inject IWebHostEnvironment Env
+@inject NavigationManager Nav
+@inject CustomerShowcaseMarkdown MarkdownRenderer
+
+<RequireAuth />
+<PageTitle>@_pageTitle</PageTitle>
+
+<p class="mb-3">
+    <a class="link-secondary" href="/customer-showcase">← 返回客户展示</a>
+    @if (_entry is not null)
+    {
+        <span class="text-muted mx-2">·</span>
+        <a class="link-secondary small" href="@($"/customer-showcase/{_entry.FileName}")" target="_blank" rel="noopener">打开原始文件</a>
+    }
+</p>
+
+@if (_missing)
+{
+    <div class="alert alert-warning">未找到该文档或未纳入展示清单。</div>
+}
+else if (!string.IsNullOrEmpty(_error))
+{
+    <div class="alert alert-danger">@_error</div>
+}
+else if (_loading)
+{
+    <p class="text-muted">加载中…</p>
+}
+else if (!string.IsNullOrEmpty(_html))
+{
+    <article class="markdown-body border rounded-3 p-4 p-md-5 bg-body">
+        @((MarkupString)_html)
+    </article>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+
+    private bool _loading = true;
+    private bool _missing;
+    private string? _error;
+    private string? _html;
+    private string _pageTitle = "文档预览";
+    private CustomerShowcaseCatalog.Entry? _entry;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _missing = false;
+        _error = null;
+        _html = null;
+        _entry = CustomerShowcaseCatalog.FindBySlug(Slug);
+        if (_entry is null)
+        {
+            _missing = true;
+            _pageTitle = "文档预览";
+            _loading = false;
+            return;
+        }
+
+        _pageTitle = _entry.Title;
+        try
+        {
+            var root = CustomerShowcasePathResolver.ResolveShowcaseDirectory(Env);
+            if (root is null)
+            {
+                _error = "未找到 customer-showcase 目录。请重新生成项目（或确认 Docker 构建已复制 doc/ 与 README.md）。";
+                _loading = false;
+                return;
+            }
+
+            var path = Path.GetFullPath(Path.Combine(root, Path.GetFileName(_entry.FileName)));
+            if (!path.StartsWith(root, StringComparison.OrdinalIgnoreCase) || !File.Exists(path))
+            {
+                _error = $"找不到文件：{_entry.FileName}。请确认已生成静态资源（重新生成解决方案）。";
+                _loading = false;
+                return;
+            }
+
+            var md = await CustomerShowcaseFileReader.ReadAllTextAsync(path);
+            _html = MarkdownRenderer.ToHtml(md);
+        }
+        catch (Exception ex)
+        {
+            _error = $"读取或渲染失败：{ex.Message}";
+        }
+        _loading = false;
+    }
+}

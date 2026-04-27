@@ -6,11 +6,12 @@
     </div>
 
     <main>
-        <div class="top-row px-4">
-            <a href="https://learn.microsoft.com/aspnet/core/" target="_blank">About</a>
+        <div class="top-row admin-app-topbar px-4 d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <span class="admin-muted-small">BLE 定位管理控制台</span>
+            <AdminSessionStatus />
         </div>
 
-        <article class="content px-4">
+        <article class="content admin-content px-4">
             @Body
         </article>
     </main>

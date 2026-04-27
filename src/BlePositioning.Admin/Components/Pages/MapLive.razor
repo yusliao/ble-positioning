@@ -3,9 +3,9 @@
 @implements IAsyncDisposable
 @inject BlePositioningApiClient Api
 @inject AdminAuthState Auth
-@inject NavigationManager Nav
 @inject IOptions<ApiOptions> ApiOptions
 
+<RequireAuth />
 <PageTitle>实时地图</PageTitle>
 <h1>实时位置</h1>
 <p class="text-muted">选择楼层与设备后约每 0.8s 拉取 <code>GET /api/v1/devices/&#123;id&#125;/position</code>。先运行 <code>scripts/demo-simulate-rssi.ps1</code> 或真实 RSSI 上报以产生位姿。地图点叠加假定 <strong>米制与平面图一致</strong>：X 自左向右、<strong>Y 自上向下</strong>（与常见楼层像素坐标系一致）。</p>
@@ -130,7 +130,7 @@ else
             // Y: 自楼层图纸顶部向下（与 HTML img 及常见 UI 一致）
             var leftPct = 100.0 * _position.X / wM;
             var topPct = 100.0 * _position.Y / hM;
-            return $"position:absolute;left:{leftPct.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}%;top:{topPct.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:#c00;box-shadow:0 0 0 2px #fff;pointer-events:none;";
+            return $"position:absolute;left:{leftPct.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}%;top:{topPct.ToString("F2", System.Globalization.CultureInfo.InvariantCulture)}%;width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:var(--map-dot,#c62828);box-shadow:0 0 0 2px var(--map-dot-ring,#fff);pointer-events:none;";
         }
     }
 
@@ -138,12 +138,6 @@ else
     {
         if (!firstRender)
             return;
-        if (string.IsNullOrEmpty(Auth.BearerToken))
-        {
-            Nav.NavigateTo("/login");
-            return;
-        }
-
         _loading = true;
         await InvokeAsync(StateHasChanged);
         try

@@ -2,9 +2,9 @@
 @rendermode InteractiveServer
 @inject BlePositioningApiClient Api
 @inject AdminAuthState Auth
-@inject NavigationManager Nav
 @inject IJSRuntime Js
 
+<RequireAuth />
 <PageTitle>楼层</PageTitle>
 <h1>楼层</h1>
 @if (!string.IsNullOrEmpty(_success))
@@ -165,12 +165,6 @@ else
     {
         if (!firstRender)
             return;
-        if (string.IsNullOrEmpty(Auth.BearerToken))
-        {
-            Nav.NavigateTo("/login");
-            return;
-        }
-
         await ReloadAsync();
     }
 

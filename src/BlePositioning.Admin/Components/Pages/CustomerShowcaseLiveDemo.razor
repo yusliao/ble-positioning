@@ -1,0 +1,309 @@
+@page "/customer-showcase/live-demo"
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+@using System.Globalization
+
+<RequireAuth />
+<PageTitle>客户展示 · 模拟定位</PageTitle>
+
+<p class="mb-3">
+    <a class="link-secondary" href="/customer-showcase">← 返回客户展示</a>
+</p>
+
+<h1>模拟定位演示</h1>
+<p class="text-muted">
+    使用<strong>纯前端模拟</strong>轨迹与信标，不依赖 API 与 RSSI 上报；适合向客户说明「蓝牙信标 + 标签位姿」在平面图上的呈现方式。
+    真实联调请使用 <a href="/map-live">实时地图</a> 与 Runbook 中的脚本。
+</p>
+
+<div class="row g-3 mb-3">
+    <div class="col-md-6">
+        <label class="form-label">演示场景</label>
+        <select class="form-select" @bind="_scenarioId" @bind:after="OnScenarioChanged">
+            @foreach (var s in Scenarios)
+            {
+                <option value="@s.Id">@s.Title</option>
+            }
+        </select>
+    </div>
+    <div class="col-md-6 d-flex align-items-end">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="anim" @bind="_animating" @bind:after="OnAnimToggle" />
+            <label class="form-check-label" for="anim">运行动画</label>
+        </div>
+    </div>
+</div>
+
+@if (_current is not null)
+{
+    <p class="small text-muted mb-2">@_current.Description</p>
+    <p class="small mb-3">
+        楼层示意：<strong>@_current.WidthM.ToString("F0", Invariant)</strong> m × <strong>@_current.HeightM.ToString("F0", Invariant)</strong> m ·
+        蓝点 = 固定信标 · 红点 = 被定位标签（模拟平滑轨迹）
+    </p>
+
+    <div class="map-live__wrap showcase-demo-floor"
+         style="@FloorWrapStyle">
+        @foreach (var b in _current.Beacons)
+        {
+            <div class="showcase-demo-beacon" style="@BeaconStyle(b.X, b.Y)" title="信标 @b.Label"></div>
+        }
+        <div style="@TagStyle" title="@($"X={_tagX:F2} m, Y={_tagY:F2} m")"></div>
+    </div>
+
+    <p class="mt-2 mb-0">
+        X: <strong>@_tagX.ToString("F2", Invariant)</strong> m,
+        Y: <strong>@_tagY.ToString("F2", Invariant)</strong> m ·
+        精度（示意）: <strong>@_current.FakeAccuracyM.ToString("F2", Invariant)</strong> m ·
+        <span class="text-success">在线（模拟）</span>
+    </p>
+}
+
+@code {
+    private static readonly CultureInfo Invariant = CultureInfo.InvariantCulture;
+
+    private sealed record BeaconPoint(double X, double Y, string Label);
+
+    private sealed record Scenario(
+        string Id,
+        string Title,
+        string Description,
+        double WidthM,
+        double HeightM,
+        double FakeAccuracyM,
+        IReadOnlyList<(double X, double Y)> Path,
+        IReadOnlyList<BeaconPoint> Beacons);
+
+    private static readonly Scenario[] Scenarios =
+    [
+        new(
+            "warehouse",
+            "仓储拣货动线",
+            "模拟叉车/手持终端在通道与备货区之间的往返，体现连续定位与转弯。",
+            48, 28, 1.2,
+            Path: [
+                (6, 6), (6, 14), (18, 14), (18, 6), (30, 6), (30, 20), (40, 20), (40, 8), (24, 8), (24, 22), (10, 22), (10, 6), (6, 6),
+            ],
+            Beacons: [
+                new(6, 6, "A1"), new(24, 8, "A2"), new(40, 20, "A3"),
+            ]),
+        new(
+            "exhibition",
+            "展厅导览",
+            "模拟参观者在展岛间沿「回形」路线移动，适合讲解展区热力与停留（此处仅示意轨迹）。",
+            36, 22, 0.9,
+            Path: [
+                (4, 4), (32, 4), (32, 18), (4, 18), (4, 4), (18, 4), (18, 18), (32, 11), (4, 11), (4, 4),
+            ],
+            Beacons: [
+                new(4, 4, "B1"), new(32, 4, "B2"), new(18, 18, "B3"), new(4, 18, "B4"),
+            ]),
+        new(
+            "geofence",
+            "禁入区绕行",
+            "模拟人员沿墙边通道前进，接近禁入角后折返，可与口播「电子围栏 / 告警」结合说明。",
+            40, 24, 1.0,
+            Path: [
+                (3, 12), (16, 12), (16, 5), (28, 5), (28, 18), (12, 18), (12, 8), (3, 8), (3, 12),
+            ],
+            Beacons: [
+                new(16, 12, "C1"), new(28, 5, "C2"), new(12, 18, "C3"),
+            ]),
+    ];
+
+    private string _scenarioId = Scenarios[0].Id;
+    private Scenario? _current;
+    private double _tagX;
+    private double _tagY;
+    private bool _animating = true;
+    private CancellationTokenSource? _cts;
+
+    protected override void OnInitialized()
+    {
+        _current = FindScenario(_scenarioId);
+        ResetTagToPathStart();
+    }
+
+    private Scenario? FindScenario(string id) =>
+        Scenarios.FirstOrDefault(s => string.Equals(s.Id, id, StringComparison.OrdinalIgnoreCase));
+
+    private void OnScenarioChanged()
+    {
+        _current = FindScenario(_scenarioId) ?? Scenarios[0];
+        ResetTagToPathStart();
+        _ = RestartLoopAsync();
+    }
+
+    private void OnAnimToggle() => _ = RestartLoopAsync();
+
+    private void ResetTagToPathStart()
+    {
+        if (_current?.Path is { Count: > 0 } p)
+        {
+            _tagX = p[0].X;
+            _tagY = p[0].Y;
+        }
+        else
+        {
+            _tagX = 0;
+            _tagY = 0;
+        }
+    }
+
+    private string FloorWrapStyle
+    {
+        get
+        {
+            if (_current is null) return "display:none";
+            var ratio = (_current.HeightM / _current.WidthM * 100).ToString("F4", Invariant);
+            return $"position:relative;display:inline-block;max-width:min(90vw,920px);width:100%;border:1px solid var(--border,#ccc);overflow:hidden;" +
+                   $"aspect-ratio:{_current.WidthM.ToString(Invariant)} / {_current.HeightM.ToString(Invariant)};" +
+                   $"background:repeating-linear-gradient(0deg,transparent,transparent 11px,rgba(0,0,0,.04) 11px,rgba(0,0,0,.04) 12px)," +
+                   $"repeating-linear-gradient(90deg,transparent,transparent 11px,rgba(0,0,0,.04) 11px,rgba(0,0,0,.04) 12px)," +
+                   $"linear-gradient(180deg,rgba(27,110,194,.06),transparent 40%);";
+        }
+    }
+
+    private string BeaconStyle(double x, double y)
+    {
+        if (_current is null) return "display:none";
+        var w = _current.WidthM;
+        var h = _current.HeightM;
+        if (w <= 0 || h <= 0) return "display:none";
+        var left = 100.0 * x / w;
+        var top = 100.0 * y / h;
+        return $"position:absolute;left:{left.ToString("F2", Invariant)}%;top:{top.ToString("F2", Invariant)}%;" +
+               "width:12px;height:12px;margin:-6px 0 0 -6px;border-radius:50%;background:#1565c0;box-shadow:0 0 0 2px #fff;pointer-events:auto;";
+    }
+
+    private string TagStyle
+    {
+        get
+        {
+            if (_current is null) return "display:none";
+            var w = _current.WidthM;
+            var h = _current.HeightM;
+            if (w <= 0 || h <= 0) return "display:none";
+            var left = 100.0 * _tagX / w;
+            var top = 100.0 * _tagY / h;
+            return $"position:absolute;left:{left.ToString("F2", Invariant)}%;top:{top.ToString("F2", Invariant)}%;" +
+                   "width:14px;height:14px;margin:-7px 0 0 -7px;border-radius:50%;background:var(--map-dot,#c62828);box-shadow:0 0 0 2px var(--map-dot-ring,#fff);pointer-events:none;";
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+        await RestartLoopAsync();
+    }
+
+    private async Task RestartLoopAsync()
+    {
+        await StopLoopAsync();
+        if (!_animating || _current?.Path is not { Count: >= 2 } path)
+            return;
+
+        var segmentLengths = new double[path.Count - 1];
+        double totalLen = 0;
+        for (var i = 0; i < path.Count - 1; i++)
+        {
+            var dx = path[i + 1].X - path[i].X;
+            var dy = path[i + 1].Y - path[i].Y;
+            segmentLengths[i] = Math.Sqrt(dx * dx + dy * dy);
+            totalLen += segmentLengths[i];
+        }
+
+        if (totalLen <= 0)
+            return;
+
+        _cts = new CancellationTokenSource();
+        var token = _cts.Token;
+        _ = Task.Run(() => AnimateLoopAsync(path, segmentLengths, totalLen, token), CancellationToken.None);
+    }
+
+    private async Task AnimateLoopAsync(
+        IReadOnlyList<(double X, double Y)> path,
+        double[] segmentLengths,
+        double total,
+        CancellationToken token)
+    {
+        if (total <= 0)
+            return;
+
+        const double secondsPerCycle = 26.0;
+        var start = DateTime.UtcNow;
+
+        try
+        {
+            while (!token.IsCancellationRequested)
+            {
+                var elapsed = (DateTime.UtcNow - start).TotalSeconds % secondsPerCycle;
+                var dist = Math.Min(elapsed / secondsPerCycle * total, total - 1e-6);
+                var (x, y) = PointAlongPath(path, segmentLengths, dist, total);
+                await InvokeAsync(() =>
+                {
+                    _tagX = x;
+                    _tagY = y;
+                    StateHasChanged();
+                });
+                try
+                {
+                    await Task.Delay(50, token);
+                }
+                catch (OperationCanceledException)
+                {
+                    break;
+                }
+            }
+        }
+        catch (OperationCanceledException) when (token.IsCancellationRequested)
+        {
+        }
+    }
+
+    private static (double X, double Y) PointAlongPath(
+        IReadOnlyList<(double X, double Y)> path,
+        double[] segmentLengths,
+        double distanceAlong,
+        double totalLength)
+    {
+        var remaining = Math.Clamp(distanceAlong, 0, Math.Max(totalLength - 1e-9, 0));
+        for (var i = 0; i < path.Count - 1; i++)
+        {
+            var len = segmentLengths[i];
+            if (remaining <= len + 1e-9)
+            {
+                var u = len > 0 ? remaining / len : 0;
+                var a = path[i];
+                var b = path[i + 1];
+                return (a.X + (b.X - a.X) * u, a.Y + (b.Y - a.Y) * u);
+            }
+
+            remaining -= len;
+        }
+
+        var last = path[^1];
+        return (last.X, last.Y);
+    }
+
+    private async Task StopLoopAsync()
+    {
+        if (_cts is null)
+            return;
+        try
+        {
+            _cts.Cancel();
+        }
+        catch
+        {
+            // ignore
+        }
+
+        _cts.Dispose();
+        _cts = null;
+        await Task.Yield();
+    }
+
+    public async ValueTask DisposeAsync() => await StopLoopAsync();
+}

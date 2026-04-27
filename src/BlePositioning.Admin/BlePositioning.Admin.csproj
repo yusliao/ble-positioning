@@ -11,4 +11,38 @@
     <ProjectReference Include="..\BlePositioning.Domain\BlePositioning.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Markdig" Version="0.38.0" />
+    <PackageReference Include="System.Text.Encoding.CodePages" Version="8.0.0" />
+  </ItemGroup>
+
+  <!-- 客户展示：构建/发布时把 doc 与根 README 复制到输出 wwwroot，供静态下载与预览页读取 -->
+  <Target Name="CopyCustomerShowcaseMarkdownToOutput" AfterTargets="Build">
+    <PropertyGroup>
+      <_ShowcaseDir>$(TargetDir)wwwroot\customer-showcase</_ShowcaseDir>
+      <_DocDir>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\doc'))</_DocDir>
+      <_Readme>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\README.md'))</_Readme>
+    </PropertyGroup>
+    <MakeDir Directories="$(_ShowcaseDir)" />
+    <Copy SourceFiles="$(_DocDir)\customer-learning.md" DestinationFiles="$(_ShowcaseDir)\customer-learning.md" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(_DocDir)\demo-runbook.md" DestinationFiles="$(_ShowcaseDir)\demo-runbook.md" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(_DocDir)\demo-rehearsal-checklist.md" DestinationFiles="$(_ShowcaseDir)\demo-rehearsal-checklist.md" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(_DocDir)\demo-seed.md" DestinationFiles="$(_ShowcaseDir)\demo-seed.md" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(_Readme)" DestinationFiles="$(_ShowcaseDir)\project-readme.md" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyCustomerShowcaseMarkdownToPublish" AfterTargets="Publish">
+    <PropertyGroup>
+      <_ShowcaseDirPub>$(PublishDir)wwwroot\customer-showcase</_ShowcaseDirPub>
+      <_DocDir>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\doc'))</_DocDir>
+      <_Readme>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..\README.md'))</_Readme>
+    </PropertyGroup>
+    <MakeDir Directories="$(_ShowcaseDirPub)" />
+    <Copy SourceFiles="$(_DocDir)\customer-learning.md" DestinationFiles="$(_ShowcaseDirPub)\customer-learning.md" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(_DocDir)\demo-runbook.md" DestinationFiles="$(_ShowcaseDirPub)\demo-runbook.md" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(_DocDir)\demo-rehearsal-checklist.md" DestinationFiles="$(_ShowcaseDirPub)\demo-rehearsal-checklist.md" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(_DocDir)\demo-seed.md" DestinationFiles="$(_ShowcaseDirPub)\demo-seed.md" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(_Readme)" DestinationFiles="$(_ShowcaseDirPub)\project-readme.md" SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>

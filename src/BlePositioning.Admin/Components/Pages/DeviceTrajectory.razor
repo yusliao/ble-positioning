@@ -2,8 +2,8 @@
 @rendermode InteractiveServer
 @inject BlePositioningApiClient Api
 @inject AdminAuthState Auth
-@inject NavigationManager Nav
 
+<RequireAuth />
 <PageTitle>设备轨迹</PageTitle>
 <p><a href="/devices">返回设备列表</a></p>
 <h1>轨迹 <small class="text-muted">@DeviceId</small></h1>
@@ -76,12 +76,6 @@
     {
         if (!firstRender)
             return;
-        if (string.IsNullOrEmpty(Auth.BearerToken))
-        {
-            Nav.NavigateTo("/login");
-            return;
-        }
-
         await LoadAsync();
     }
 

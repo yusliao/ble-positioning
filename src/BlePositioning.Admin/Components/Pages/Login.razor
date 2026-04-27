@@ -1,27 +1,44 @@
 @page "/login"
+@layout EmptyLayout
 @rendermode InteractiveServer
+@using Microsoft.AspNetCore.WebUtilities
 @inject BlePositioningApiClient Api
 @inject AdminAuthState Auth
 @inject NavigationManager Nav
 @inject IOptions<ApiOptions> ApiOptions
 
 <PageTitle>登录</PageTitle>
-<h1>管理登录</h1>
-<p class="text-muted">使用与 API <code>DevAdmin</code> 相同的账号。默认 <strong>admin</strong> / <strong>ChangeMe!</strong>；只读账号示例 <strong>viewer</strong> / <strong>ViewOnly!</strong>（见 API <code>appsettings.json</code> <code>Users</code>）。</p>
-<p class="text-muted small">本 Admin 进程访问 API 的基址为：<code>@_apiBaseForHint</code>（<code>appsettings</code> 中 <code>Api:Base</code> 或环境变量 <code>Api__Base</code>）。Docker 管理端对宿主机是 <code>:5001</code>，对 API 多为容器内 <code>http://api:8080</code>。</p>
-<EditForm Model="_model" OnValidSubmit="OnSubmitAsync">
-    <p>
-        <InputText @bind-Value="_model.Username" class="form-control" placeholder="用户名" />
-    </p>
-    <p>
-        <InputText @bind-Value="_model.Password" class="form-control" placeholder="密码" type="password" />
-    </p>
-    <button class="btn btn-primary" type="submit">登录</button>
-    @if (!string.IsNullOrEmpty(_err))
-    {
-        <p class="text-danger mt-2">@_err</p>
-    }
-</EditForm>
+
+<div class="admin-login-card card shadow-sm">
+    <div class="card-body p-4 p-md-5">
+        <h1 class="h3 mb-1">BlePositioning 管理端</h1>
+        <p class="text-muted small mb-4">使用与 API 相同的账号登录；登录一次即可访问所有功能页。</p>
+
+        <EditForm Model="_model" OnValidSubmit="OnSubmitAsync">
+            <div class="mb-3">
+                <label class="form-label">用户名</label>
+                <InputText @bind-Value="_model.Username" class="form-control form-control-lg" placeholder="例如 admin" autocomplete="username" />
+            </div>
+            <div class="mb-4">
+                <label class="form-label">密码</label>
+                <InputText @bind-Value="_model.Password" class="form-control form-control-lg" placeholder="密码" type="password" autocomplete="current-password" />
+            </div>
+            <button class="btn btn-primary btn-lg w-100" type="submit">登录</button>
+            @if (!string.IsNullOrEmpty(_err))
+            {
+                <div class="alert alert-danger mt-3 mb-0 small" role="alert">@_err</div>
+            }
+        </EditForm>
+
+        <hr class="my-4" />
+        <p class="text-muted small mb-2">
+            默认管理员 <kbd>admin</kbd> / <kbd>ChangeMe!</kbd>；只读示例 <kbd>viewer</kbd> / <kbd>ViewOnly!</kbd>（见 API <code>appsettings.json</code> → <code>Users</code>）。
+        </p>
+        <p class="text-muted small mb-0">
+            API 基址：<code>@_apiBaseForHint</code>（<code>Api:Base</code> 或环境变量 <code>Api__Base</code>）。Docker 管理端对宿主机多为 <code>:5001</code>，容器内访问 API 常为 <code>http://api:8080</code>。
+        </p>
+    </div>
+</div>
 
 @code {
     private LoginModel _model = new();
@@ -39,7 +56,21 @@
         }
         Auth.BearerToken = r.Data.AccessToken;
         Auth.Role = r.Data.Role;
-        Nav.NavigateTo("/");
+        Nav.NavigateTo(GetPostLoginPath());
+    }
+
+    private string GetPostLoginPath()
+    {
+        var uri = Nav.ToAbsoluteUri(Nav.Uri);
+        var q = QueryHelpers.ParseQuery(uri.Query);
+        if (!q.TryGetValue("returnUrl", out var values) || values.Count == 0)
+            return "/";
+        var raw = values[0];
+        if (string.IsNullOrEmpty(raw))
+            return "/";
+        if (!AdminRouteGuard.IsSafeReturnUrl(raw))
+            return "/";
+        return raw.StartsWith('/') ? raw : "/" + raw;
     }
 
     private sealed class LoginModel
