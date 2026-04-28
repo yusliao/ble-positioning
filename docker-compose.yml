@@ -48,7 +48,7 @@ services:
       POSTGRES_DB: blepositioning
     # 格式 宿主机端口:容器内5432；API/Redis 在 compose 网内请始终连 postgres:5432
     ports:
-      - "5432:5432"
+      - "5437:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
