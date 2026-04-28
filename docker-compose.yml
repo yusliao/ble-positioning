@@ -18,6 +18,7 @@ services:
       ASPNETCORE_URLS: "http://+:8080"
       # 与本地 dotnet run 一致，启用 Swagger；生产部署请用单独编排并关闭公开 Swagger
       ASPNETCORE_ENVIRONMENT: Development
+      # 与 postgres 服务通信须用容器内端口 5432；左侧宿主机映射（如 5437:5432）只影响从宿主机连库，勿改此处 Port
       ConnectionStrings__Default: "Host=postgres;Port=5432;Database=blepositioning;Username=postgres;Password=Dev_Postgres_ChangeMe"
       ConnectionStrings__Redis: "redis:6379"
       ApiKey__Pepper: "docker-dev-pepper-change-me"
@@ -33,6 +34,8 @@ services:
     environment:
       ASPNETCORE_URLS: "http://+:8080"
       Api__Base: "http://api:8080"
+      # 浏览器打开 Swagger / 地图图 URL；须为宿主机可访问的 API 地址（与 api 端口映射一致）
+      Api__PublicBase: "http://localhost:5000"
     depends_on:
       - api
 
@@ -43,6 +46,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: Dev_Postgres_ChangeMe
       POSTGRES_DB: blepositioning
+    # 格式 宿主机端口:容器内5432；API/Redis 在 compose 网内请始终连 postgres:5432
     ports:
       - "5432:5432"
     volumes:

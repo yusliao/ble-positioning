@@ -35,7 +35,7 @@
             默认管理员 <kbd>admin</kbd> / <kbd>ChangeMe!</kbd>；只读示例 <kbd>viewer</kbd> / <kbd>ViewOnly!</kbd>（见 API <code>appsettings.json</code> → <code>Users</code>）。
         </p>
         <p class="text-muted small mb-0">
-            API 基址：<code>@_apiBaseForHint</code>（<code>Api:Base</code> 或环境变量 <code>Api__Base</code>）。Docker 管理端对宿主机多为 <code>:5001</code>，容器内访问 API 常为 <code>http://api:8080</code>。
+            API 基址：<code>@_apiBaseForHint</code>（<code>Api:Base</code> / <code>Api__Base</code>）。Docker 下容器内常为 <code>http://api:8080</code>；若 Swagger 等链接打不开，请配置浏览器用基址 <code>Api:PublicBase</code>（<code>Api__PublicBase</code>，例如 <code>http://localhost:5000</code>）。
         </p>
     </div>
 </div>

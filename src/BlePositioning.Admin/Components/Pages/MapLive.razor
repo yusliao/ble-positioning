@@ -114,7 +114,7 @@ else
             var m = _floor.MapImageUrl.Trim();
             if (m.StartsWith("http", StringComparison.OrdinalIgnoreCase))
                 return m;
-            var b = ApiOptions.Value.Base?.Trim().TrimEnd('/') ?? "http://localhost:5230";
+            var b = ApiOptions.Value.GetBrowserApiRoot();
             return m.StartsWith('/') ? $"{b}{m}" : $"{b}/{m}";
         }
     }

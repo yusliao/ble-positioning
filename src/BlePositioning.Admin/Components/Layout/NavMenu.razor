@@ -97,7 +97,7 @@
     {
         get
         {
-            var b = ApiOptions.Value.Base?.Trim().TrimEnd('/') ?? "http://localhost:5230";
+            var b = ApiOptions.Value.GetBrowserApiRoot();
             return $"{b}/swagger";
         }
     }

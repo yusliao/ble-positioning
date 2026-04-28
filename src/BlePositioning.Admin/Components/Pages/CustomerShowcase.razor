@@ -1,70 +1,21 @@
 @page "/customer-showcase"
 @rendermode InteractiveServer
-@inject NavigationManager Nav
 
 <RequireAuth />
 <PageTitle>客户展示</PageTitle>
 
 <h1>客户展示</h1>
-<p class="text-muted">以下为仓库中的客户/培训向 Markdown，可在会议前<strong>一键预览</strong>渲染效果；源文件仍可在 IDE 或 <code>doc/</code> 目录编辑。</p>
-
-<div class="card mb-4 border-primary admin-showcase-hero">
-    <div class="card-body d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
-        <div>
-            <h2 class="h5 mb-1">会议演示（推荐入口）</h2>
-            <p class="text-muted small mb-0">直接打开《客户演示 Runbook》的排版预览，适合投屏或共享窗口。</p>
-        </div>
-        <button type="button" class="btn btn-primary btn-lg text-nowrap" @onclick="OpenPrimaryDemo">
-            一键预览 Runbook
-        </button>
-    </div>
-</div>
+<p class="text-muted mb-4">
+    面向客户讲解蓝牙室内定位的<strong>可视化演示</strong>：平面图上的信标与移动标签，多场景切换，无需 API 与 RSSI 上报。
+    真实环境联调请使用 <a href="/map-live">实时地图</a>。
+</p>
 
 <div class="card mb-4 border-success admin-showcase-live">
     <div class="card-body d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3">
         <div>
             <h2 class="h5 mb-1">蓝牙定位效果（模拟数据）</h2>
-            <p class="text-muted small mb-0">无需 API / RSSI：平面图上的信标与移动标签，按场景切换，便于向客户展示定位呈现逻辑。</p>
+            <p class="text-muted small mb-0">按场景展示定位呈现逻辑，适合投屏或会议讲解。</p>
         </div>
         <a class="btn btn-success btn-lg text-nowrap" href="/customer-showcase/live-demo">打开模拟定位</a>
     </div>
 </div>
-
-<div class="row g-3">
-    @foreach (var doc in CustomerShowcaseCatalog.Documents)
-    {
-        <div class="col-md-6 col-xl-4">
-            <div class="card h-100 shadow-sm">
-                <div class="card-body d-flex flex-column">
-                    @if (doc.PrimaryDemo)
-                    {
-                        <span class="badge text-bg-primary align-self-start mb-2">主线演示</span>
-                    }
-                    <h2 class="h6 card-title">@doc.Title</h2>
-                    <p class="text-muted small flex-grow-1">@doc.Summary</p>
-                    <div class="d-flex flex-wrap gap-2 mt-2">
-                        <button type="button" class="btn btn-outline-primary btn-sm" @onclick="() => Preview(doc.Slug)">预览</button>
-                        <a class="btn btn-outline-secondary btn-sm" href="@DocHref(doc.FileName)" target="_blank" rel="noopener">原始 Markdown</a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    }
-</div>
-
-<p class="text-muted small mt-4 mb-0">说明：预览页由服务端将 Markdown 转为 HTML；文档内相对链接若指向仓库内其他文件，在浏览器中可能需从 Git 或本地打开对应路径。</p>
-
-@code {
-    private static string DocHref(string fileName) =>
-        $"/customer-showcase/{fileName}";
-
-    private void OpenPrimaryDemo()
-    {
-        var primary = CustomerShowcaseCatalog.Documents.FirstOrDefault(d => d.PrimaryDemo)
-            ?? CustomerShowcaseCatalog.Documents[0];
-        Preview(primary.Slug);
-    }
-
-    private void Preview(string slug) =>
-        Nav.NavigateTo($"/customer-showcase/preview/{slug}");
-}
