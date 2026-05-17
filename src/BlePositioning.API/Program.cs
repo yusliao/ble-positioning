@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Text;
+using BlePositioning.API.Extensions;
 using BlePositioning.API.Hubs;
 using BlePositioning.API.Middleware;
 using BlePositioning.API.Options;
@@ -28,6 +29,8 @@ builder.Host.UseSerilog((ctx, cfg) =>
 
 builder.Services.Configure<DevAdminOptions>(builder.Configuration.GetSection(DevAdminOptions.SectionName));
 builder.Services.Configure<FloorMapStorageOptions>(builder.Configuration.GetSection(FloorMapStorageOptions.SectionName));
+builder.Services.Configure<SecurityHeadersOptions>(builder.Configuration.GetSection(SecurityHeadersOptions.SectionName));
+builder.Services.AddBlePositioningRateLimiting(builder.Configuration);
 builder.Services.AddSingleton<IFloorMapStorage, WebHostFloorMapStorage>();
 builder.Services.AddSingleton<JwtTokenIssuer>();
 
@@ -113,6 +116,7 @@ builder.Services.AddSingleton<IDevicePresenceEventPublisher, SignalRDevicePresen
 var app = builder.Build();
 
 app.UseCors("SignalR");
+app.UseMiddleware<SecurityHeadersMiddleware>();
 app.UseSerilogRequestLogging();
 // 不依赖端点表匹配：在管道内直接处理 GET /，避免在部分配置下对 "/" 落 404
 app.Use(async (context, next) =>
@@ -148,7 +152,12 @@ if (app.Environment.IsDevelopment())
 app.UseAuthentication();
 app.UseAuthorization();
 
-app.MapGet("/health", () => Results.Json(new { status = "Healthy" }));
+var rateLimitingEnabled = app.Services.GetRequiredService<Microsoft.Extensions.Options.IOptions<RateLimitingOptions>>().Value.Enabled;
+if (rateLimitingEnabled)
+    app.UseRateLimiter();
+
+app.MapGet("/health", () => Results.Json(new { status = "Healthy" }))
+    .DisableRateLimiting();
 
 app.MapGet("/health/ready", async (AppDbContext db, IConnectionMultiplexer redis, HttpContext ctx) =>
 {
@@ -172,11 +181,12 @@ app.MapGet("/health/ready", async (AppDbContext db, IConnectionMultiplexer redis
             },
             statusCode: StatusCodes.Status503ServiceUnavailable);
     }
-});
+}).DisableRateLimiting();
 
 app.MapControllers();
-app.MapHub<PositioningHub>("/hubs/positioning").RequireAuthorization();
-app.MapMetrics();
+
+app.MapHub<PositioningHub>("/hubs/positioning").RequireAuthorization().DisableRateLimiting();
+app.MapMetrics().DisableRateLimiting();
 
 if (!app.Environment.IsEnvironment("Testing"))
 {

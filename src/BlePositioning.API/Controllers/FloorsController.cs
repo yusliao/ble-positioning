@@ -1,4 +1,5 @@
 using BlePositioning.API.Extensions;
+using Microsoft.AspNetCore.RateLimiting;
 using BlePositioning.Application.Common.Models;
 using BlePositioning.Application.Floors;
 using BlePositioning.Application.Security;
@@ -10,6 +11,7 @@ namespace BlePositioning.API.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/v1/floors")]
+[EnableRateLimiting(RateLimitingServiceExtensions.GeneralPolicyName)]
 public sealed class FloorsController(IFloorService floorService) : ControllerBase
 {
     [HttpGet]

@@ -41,6 +41,14 @@ $env:DOCKER_BUILDKIT="0"; $env:COMPOSE_DOCKER_CLI_BUILD="0"; docker compose up -
 pwsh -File scripts/verify-mvp.ps1
 ```
 
+## 生产部署（阶段 G）
+
+- **检查表**：[`doc/production-readiness-checklist.md`](doc/production-readiness-checklist.md)（密钥、网络、限流、冒烟、回滚）。
+- **密钥轮换与限流/安全头**：[`doc/security-operations.md`](doc/security-operations.md)。
+- **环境**：`ASPNETCORE_ENVIRONMENT=Production` 加载 `appsettings.Production.json`（HSTS、限流默认开启；**不**暴露 Swagger）。
+- **限流**：RSSI 默认 **10 次/秒/设备**；其余 API **60 次/分钟/用户或 IP**；超限 **429**（见 `api-conventions.md` §4）。
+- **CI**：push/PR 跑无 Docker 测试；**`integration-docker`** job 跑 `Category=docker`（Testcontainers）。
+
 ## 文档
 
 - **索引**：`doc/README.md`（契约以 **`doc/api-conventions.md`** 为准）。  

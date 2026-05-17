@@ -3,11 +3,13 @@ using BlePositioning.API.Security;
 using BlePositioning.Application.Positioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 
 namespace BlePositioning.API.Controllers;
 
 [ApiController]
 [Route("api/v1/rssi")]
+[EnableRateLimiting(RateLimitingServiceExtensions.RssiPolicyName)]
 public sealed class RssiController(IRssiReportQueue queue) : ControllerBase
 {
     [HttpPost("report")]

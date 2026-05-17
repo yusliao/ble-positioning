@@ -20,6 +20,7 @@ public sealed class ApiWebAppFactory : WebApplicationFactory<Program>
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         builder.UseEnvironment("Testing");
+        builder.UseSetting("RateLimiting:Enabled", "false");
         builder.ConfigureTestServices(services =>
         {
             foreach (var d in services.Where(d =>

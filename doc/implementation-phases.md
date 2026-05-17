@@ -109,10 +109,11 @@
 
 ## 阶段 G：质量与生产就绪
 
+- **本阶段实现摘要（2026-05-17）**：**`SecurityHeadersMiddleware`** + **`RateLimiting`**（RSSI 滑动窗口 / 普通 API 固定窗口，429 ProblemDetails）；**`appsettings.Production.json`**；**`doc/production-readiness-checklist.md`**、**`doc/security-operations.md`**；CI **`integration-docker`** job（`Category=docker`）；测试 **`RateLimitingApiTests`**、**`SecurityHeadersApiTests`**。
 - **目标**：CI 策略（linux docker job / nightly）；安全（headers、限流、密钥轮换说明）；`README` 生产节；SLO/日志字段对齐。
 - **DoD**：
 
-- [ ] 团队认可的「可上线检查表」+ checkpoint 定稿为 v1。
+- [x] 团队认可的「可上线检查表」+ checkpoint 定稿为 v1。
 
 ---
 

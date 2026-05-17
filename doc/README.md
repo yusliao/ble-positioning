@@ -22,6 +22,8 @@
 | 6 | [database-selection.md](./database-selection.md) | PostgreSQL 选型与本地连接 |
 | 7 | [CLAUDE.md](./CLAUDE.md) | AI 总上下文、领域模型摘要 |
 | 8 | [implementation-phases.md](./implementation-phases.md) | **全量分阶段实现路线图、DoD、阶段交接与省 token 提示** |
+| 9 | [production-readiness-checklist.md](./production-readiness-checklist.md) | **生产上线检查表 v1**（阶段 G） |
+| 10 | [security-operations.md](./security-operations.md) | 密钥轮换、限流、安全响应头运维说明 |
 | — | [demo-runbook.md](./demo-runbook.md) | 客户演示：环境、主线、**扩展时间盒**、故障处理 |
 | — | [demo-seed.md](./demo-seed.md) | 演示种子数据与坐标约定（无密钥） |
 | — | [demo-rehearsal-checklist.md](./demo-rehearsal-checklist.md) | 口播与计时：**主线 / 扩展** 分表 |

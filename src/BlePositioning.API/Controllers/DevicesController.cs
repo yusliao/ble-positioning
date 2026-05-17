@@ -1,4 +1,5 @@
 using BlePositioning.API.Extensions;
+using Microsoft.AspNetCore.RateLimiting;
 using BlePositioning.Application.Common.Models;
 using BlePositioning.Application.Devices;
 using BlePositioning.Application.Geofence;
@@ -12,6 +13,7 @@ namespace BlePositioning.API.Controllers;
 [ApiController]
 [Authorize]
 [Route("api/v1/devices")]
+[EnableRateLimiting(RateLimitingServiceExtensions.GeneralPolicyName)]
 public sealed class DevicesController(
     IDeviceService deviceService,
     IGeofenceEventQueryService geofenceEventQuery,

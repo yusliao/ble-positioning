@@ -1,4 +1,5 @@
 using BlePositioning.API.Extensions;
+using Microsoft.AspNetCore.RateLimiting;
 using BlePositioning.API.Options;
 using BlePositioning.API.Security;
 using BlePositioning.Application.Common.Models;
@@ -12,6 +13,7 @@ namespace BlePositioning.API.Controllers;
 
 [ApiController]
 [Route("api/v1/auth")]
+[EnableRateLimiting(RateLimitingServiceExtensions.GeneralPolicyName)]
 public sealed class AuthController(
     IOptions<DevAdminOptions> devAdmin,
     IOptions<JwtOptions> jwtOptions,
